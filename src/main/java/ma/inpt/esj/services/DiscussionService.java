@@ -15,13 +15,16 @@ public interface DiscussionService {
     List<Discussion> getDiscussionsByMedecinSpecialite(Long medecinId) throws MedecinNotFoundException;
 
     List<Discussion> getDiscussionByMedecinResponsable(Long medcinId) throws MedecinNotFoundException;
-    List<Discussion> getByParticipantId(Long medecinId) throws MedecinNotFoundException;
+    List<Discussion> getDiscussionsByMedecinIdAndStatus(Long medecinId) throws MedecinNotFoundException;
 
     List<Discussion> getFinishedDiscussionsByParticipantId(Long medecinId) throws MedecinNotFoundException;
 
 
     Discussion getDiscussion(Long id) throws DiscussionNotFoundException;
     Discussion startDiscussion(Long id) throws DiscussionNotFoundException, DiscussionException;
+
+    Discussion finishDiscussion(Long id) throws DiscussionNotFoundException, DiscussionException;
+
     Discussion joinDiscussion(Long id, Long medecinId) throws DiscussionNotFoundException, MedecinNotFoundException, DiscussionException;
 
 }

@@ -64,6 +64,18 @@ public class DiscussionController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         }
     }
+    @PutMapping("/{id}/finish")
+    public ResponseEntity<?> finishDiscussion(@PathVariable Long id) {
+        try {
+            Discussion d = discussionService.finishDiscussion(id);
+            return ResponseEntity.ok(d);
+        } catch (DiscussionException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (DiscussionNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        }
+    }
+
 
     @PostMapping("/{id}/join")
     public ResponseEntity<?> joinDiscussion(@PathVariable Long id, @RequestParam Long medecinId) {
@@ -101,7 +113,7 @@ public class DiscussionController {
     @GetMapping("/discussionsPlanifiees/{medecinId}")
     public ResponseEntity<?> getDiscussionsPlanifiees(@PathVariable Long medecinId) {
         try {
-            List<Discussion> d = discussionService.getByParticipantId(medecinId);
+            List<Discussion> d = discussionService.getDiscussionsByMedecinIdAndStatus(medecinId);
             return ResponseEntity.ok(d);
         }  catch (MedecinNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());

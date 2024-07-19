@@ -17,6 +17,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static ma.inpt.esj.enums.DiscussionStatus.EN_COURS;
+import static ma.inpt.esj.enums.DiscussionStatus.TERMINEE;
 
 @Service
 public class DiscussionServiceImpl implements DiscussionService {
@@ -74,13 +75,25 @@ public class DiscussionServiceImpl implements DiscussionService {
 
     @Override
     @Transactional
+    public Discussion finishDiscussion(Long id) throws DiscussionNotFoundException, DiscussionException {
+        Discussion discussion = getDiscussion(id);
+        discussion.setStatus(TERMINEE);
+        try {
+            return discussionRepository.save(discussion);
+        } catch (Exception e) {
+            throw new DiscussionException("Erreur lors du lancement de la discussion", e);
+        }
+    }
+
+    @Override
+    @Transactional
     public Discussion joinDiscussion(Long id, Long medecinId) throws DiscussionNotFoundException, MedecinNotFoundException, DiscussionException {
         Discussion discussion = getDiscussion(id);
 
         Medecin medecin = medecinRepository.findById(medecinId)
                 .orElseThrow(() -> new MedecinNotFoundException("Le médecin avec l'identifiant " + medecinId + " non trouvé."));
 
-        discussion.addMedecin(medecin);
+        discussion.getParticipants().add(medecin);
 
         try {
             return discussionRepository.save(discussion);
@@ -114,10 +127,10 @@ public class DiscussionServiceImpl implements DiscussionService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Discussion> getByParticipantId(Long medecinId) throws MedecinNotFoundException {
+    public List<Discussion> getDiscussionsByMedecinIdAndStatus(Long medecinId) throws MedecinNotFoundException {
         try {
             List<DiscussionStatus> status = Arrays.asList(DiscussionStatus.EN_COURS, DiscussionStatus.PLANIFIEE);
-            return discussionRepository.findByParticipantIdAndStatus(medecinId, status);
+            return discussionRepository.findDiscussionsByMedecinIdAndStatus(medecinId, status);
         } catch (Exception e) {
             throw new MedecinNotFoundException("Le médecin avec l'identifiant " + medecinId + " n'a pas été trouvé.", e);
         }
@@ -140,6 +153,8 @@ public class DiscussionServiceImpl implements DiscussionService {
             throw new MedecinNotFoundException("Le médecin avec l'identifiant " + medecinId + " n'a pas été trouvé.", e);
         }
     }
+
+
 
 
 

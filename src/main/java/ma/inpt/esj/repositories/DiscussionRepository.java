@@ -18,6 +18,8 @@ public interface DiscussionRepository extends JpaRepository<Discussion, Long> {
 
     @Query("SELECT d FROM Discussion d JOIN d.participants p WHERE p.id = :medecinId AND d.status IN (:statuses)")
     List<Discussion> findByParticipantIdAndStatus(@Param("medecinId") Long medecinId, @Param("statuses") List<DiscussionStatus> statuses);
+    @Query("SELECT d FROM Discussion d JOIN d.invitationsAcceptees inv WHERE :medecinId IN (SELECT m.id FROM inv.medecinInvite m) AND d.status IN (:statuses)")
+    List<Discussion> findDiscussionsByMedecinIdAndStatus(@Param("medecinId") Long medecinId, @Param("statuses") List<DiscussionStatus> statuses);
 
 
 

@@ -74,7 +74,5 @@ public class Discussion {
     @OneToOne(mappedBy = "discussion", cascade = CascadeType.ALL, orphanRemoval = true)
     private CompteRendu compteRendu;
 
-    public void addMedecin(Medecin medecin) {
-        this.participants.add(medecin);
-    }
+
 }
