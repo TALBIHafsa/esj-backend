@@ -18,6 +18,7 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,27 +41,40 @@ public class MedecinServiceImpl implements MedecinService {
     private MedecinRepository medecinRepository;
     private InfoUserRepository userRepository;
     private MedecineMapper medecineMapper;
+    private PasswordEncoder passwordEncoder;
 
     private ConfirmationTokenRepository confirmationTokenRepository;
     private JavaMailSender mailSender;
 
+    private ConfirmeMailService confirmeMailService;
 
     public MedecinResponseDTO saveMedecin(Medecin medecin) throws MedecinException {
+        System.out.println("Starting saveMedecin method");
+
         if (medecinRepository.existsByCin(medecin.getCin())) {
+            System.out.println("CIN already exists: " + medecin.getCin());
             throw new MedecinException("Le numéro de CIN spécifié est déjà utilisé par un autre utilisateur");
         }
         if (medecinRepository.existsByInpe(medecin.getInpe())) {
+            System.out.println("INPE already exists: " + medecin.getInpe());
             throw new MedecinException("Le numéro INPE spécifié est déjà utilisé par un autre utilisateur");
         }
         if (medecinRepository.existsByPpr(medecin.getPpr())) {
+            System.out.println("PPR already exists: " + medecin.getPpr());
             throw new MedecinException("Le numéro PPR spécifié est déjà utilisé par un autre utilisateur");
         }
         if (userRepository.existsByMail(medecin.getInfoUser().getMail())) {
+            System.out.println("Email already exists: " + medecin.getInfoUser().getMail());
             throw new MedecinException("L'email spécifié est déjà utilisé par un autre utilisateur");
         }
 
+        System.out.println("Encoding password");
+        medecin.getInfoUser().setMotDePasse(passwordEncoder.encode(medecin.getInfoUser().getMotDePasse()));
+
+        System.out.println("Saving Medecin");
         Medecin savedMedecin = medecinRepository.save(medecin);
 
+        System.out.println("Creating and saving confirmation token");
         String token = UUID.randomUUID().toString();
         ConfirmationToken confirmationToken = new ConfirmationToken();
         confirmationToken.setMedecin(savedMedecin);
@@ -68,8 +82,12 @@ public class MedecinServiceImpl implements MedecinService {
         confirmationToken.setToken(token);
         confirmationTokenRepository.save(confirmationToken);
 
-        new Thread(() -> sendConfirmationEmail(savedMedecin.getInfoUser().getMail(), token)).start();
+        new Thread(() -> {
+            System.out.println("Sending confirmation email");
+            confirmeMailService.sendConfirmationEmail(savedMedecin.getInfoUser().getMail(), token);
+        }).start();
 
+        System.out.println("Returning response");
         return medecineMapper.fromMedcine(savedMedecin);
     }
 
@@ -103,6 +121,12 @@ public class MedecinServiceImpl implements MedecinService {
                 case "password":
                     existingMedecin.getInfoUser().setMotDePasse((String) value);
                     break;
+                case "confirmed":
+                    existingMedecin.getInfoUser().setConfirmed((Boolean) value);
+                    break;
+                case "isFirstAuth":
+                    existingMedecin.getInfoUser().setFirstAuth((Boolean) value);
+                    break;
                 case "cin":
                     existingMedecin.setCin((String) value);
                     break;
@@ -111,6 +135,12 @@ public class MedecinServiceImpl implements MedecinService {
                     break;
                 case "ppr":
                     existingMedecin.setPpr((String) value);
+                    break;
+                    case "about":
+                    existingMedecin.setAbout((String) value);
+                    break;
+                    case "sexe":
+                    existingMedecin.setSexe((String) value);
                     break;
                 case "estMedcinESJ":
                     existingMedecin.setEstMedcinESJ((Boolean) value);
@@ -121,6 +151,7 @@ public class MedecinServiceImpl implements MedecinService {
                 case "specialite":
                     existingMedecin.setSpecialite((String) value);
                     break;
+
                 default:
                     throw new IllegalArgumentException("Invalid attribute: " + key);
             }
@@ -147,37 +178,6 @@ public class MedecinServiceImpl implements MedecinService {
     }
 
 
-    @Override
-    public Medecin confirmEmail(String token) {
-        ConfirmationToken confirmationToken = confirmationTokenRepository.findByToken(token);
-        if (confirmationToken != null) {
-            Date now = new Date();
-            Medecin medecin = confirmationToken.getMedecin();
-            long diffMs = now.getTime() - confirmationToken.getCreatedDate().getTime();
-            if (diffMs > EXPIRATION_TIME_MS) {
-                throw new RuntimeException("Confirmation token has expired");
-            }
-            medecin.setConfirmed(true);
-            medecinRepository.save(medecin);
-            return medecin;
-        } else {
-            throw new RuntimeException("Invalid confirmation token");
-        }
-    }
-    @Override
-    public void sendEmail(String to, String subject, String htmlBody) {
-        MimeMessage message = mailSender.createMimeMessage();
-        try {
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setTo(to);
-            helper.setSubject(subject);
-            helper.setText(htmlBody, true); // true indique que le contenu est HTML
-
-            mailSender.send(message);
-        } catch (MessagingException e) {
-            e.printStackTrace();
-        }
-    }
      @Override
     public List<MedecinResponseDTO> getAllMedecins() {
         List<Medecin> medecins = medecinRepository.findAll();
