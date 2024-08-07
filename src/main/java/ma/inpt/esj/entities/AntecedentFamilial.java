@@ -1,24 +1,30 @@
 package ma.inpt.esj.entities;
 
-import jakarta.persistence.*;
+
+import jakarta.persistence.Embeddable;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Builder;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 import java.util.List;
 
-@Entity
-@Data @AllArgsConstructor @NoArgsConstructor
+@Embeddable
+@Getter
+@Setter
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+@ToString
 public class AntecedentFamilial {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
 
-    @ElementCollection
     private List<String> maladiesFamiliales;
 
-    @OneToOne
-    @JoinColumn(name = "jeune_id")
-    private Jeune jeune;
+    //----------------------------
+    private String typeAntFam;
+    private String autre;
 }
+
 

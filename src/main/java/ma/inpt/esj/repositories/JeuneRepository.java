@@ -41,7 +41,7 @@ public interface JeuneRepository extends JpaRepository<Jeune, Long> {
     @Query(value = "select j.* from jeune j, dossier_medical d where d.jeune_id = j.id and d.maladies_diagnostiquees = :maladie", nativeQuery = true)
     List<Jeune> getAllJeunesByMaladie(@Param("maladie") String maladie);
     */
-    List<Jeune> findByMedecinId(Long medecinId);
+    //List<Jeune> findByMedecinId(Long medecinId);
 
     @Query("SELECT j FROM Jeune j " + "WHERE j.infoUser.mail = :searchParam " + "OR j.cin = :searchParam " +
             "OR EXISTS (SELECT s FROM JeuneScolarise s WHERE (s.cne = :searchParam OR s.codeMassare = :searchParam) AND s.id = j.id)")
@@ -49,4 +49,10 @@ public interface JeuneRepository extends JpaRepository<Jeune, Long> {
 
     @Query("SELECT j FROM Jeune j WHERE j.infoUser.mail = :mail")
     Optional<Jeune> findByMail(@Param("mail") String mail);
+
+    boolean existsByCin(String cin);
+    @Query("SELECT CASE WHEN COUNT(s) > 0 THEN true ELSE false END FROM JeuneScolarise s WHERE s.cne = :cne")
+    boolean existsByCNE(@Param("cne") String cne);
+    @Query("SELECT CASE WHEN COUNT(j) > 0 THEN true ELSE false END FROM JeuneScolarise j WHERE j.codeMassare = :codeMassare")
+    boolean existsByCodeMassare(@Param("codeMassare") String codeMassare);
 }

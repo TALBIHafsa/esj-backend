@@ -1,54 +1,150 @@
+
 package ma.inpt.esj.services;
 
+import ma.inpt.esj.dto.DiscussionRequestDto;
+import ma.inpt.esj.dto.DiscussionResponseDto;
+import ma.inpt.esj.dto.PageResponseDto;
 import ma.inpt.esj.entities.Discussion;
+import ma.inpt.esj.entities.Invitation;
 import ma.inpt.esj.entities.Medecin;
 import ma.inpt.esj.enums.DiscussionStatus;
+import ma.inpt.esj.enums.InvitationStatus;
 import ma.inpt.esj.exception.DiscussionException;
 import ma.inpt.esj.exception.DiscussionNotFoundException;
 import ma.inpt.esj.exception.MedecinNotFoundException;
+import ma.inpt.esj.mappers.DiscussionMapper;
 import ma.inpt.esj.repositories.DiscussionRepository;
+import ma.inpt.esj.repositories.InvitationRepository;
 import ma.inpt.esj.repositories.MedecinRepository;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-
+import java.util.stream.Collectors;
 import static ma.inpt.esj.enums.DiscussionStatus.EN_COURS;
-import static ma.inpt.esj.enums.DiscussionStatus.TERMINEE;
+import static ma.inpt.esj.enums.DiscussionStatus.PLANIFIEE;
+import static ma.inpt.esj.enums.DiscussionStatus.TERMINEE;;;
 
 @Service
 public class DiscussionServiceImpl implements DiscussionService {
 
     private final DiscussionRepository discussionRepository;
     private final MedecinRepository medecinRepository;
+    private final DiscussionMapper discussionMapper;
+    private final InvitationRepository invitationRepository;
 
     @Autowired
-    public DiscussionServiceImpl(DiscussionRepository discussionRepository, MedecinRepository medecinRepository) {
+    public DiscussionServiceImpl(
+            DiscussionRepository discussionRepository,
+            MedecinRepository medecinRepository,
+            DiscussionMapper discussionMapper,
+            InvitationRepository invitationRepository
+    ) {
         this.discussionRepository = discussionRepository;
         this.medecinRepository = medecinRepository;
+        this.discussionMapper = discussionMapper;
+        this.invitationRepository = invitationRepository;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<Discussion> getAllDiscussions() throws DiscussionException {
+    public List<DiscussionResponseDto> getAllDiscussions() throws DiscussionException {
         try {
-            return discussionRepository.findAll();
+            List<Discussion> discussions = discussionRepository.findAll();
+            List<DiscussionResponseDto> discussionResponseDtos = new ArrayList<>();
+            discussions.forEach(discussion -> {
+                discussionResponseDtos.add(discussionMapper.fromDiscussionToDiscussionResponseDto(discussion));
+            });
+            return discussionResponseDtos;
         } catch (Exception e) {
+            System.out.println(e);
             throw new DiscussionException("Erreur lors de la récupération des discussions", e);
         }
     }
 
     @Override
+    public PageResponseDto<DiscussionResponseDto> getMyDiscussions(
+            Long organizerId, String keyword, DiscussionStatus status, boolean isParticipant, int page, int size
+    ) throws DiscussionException {
+        try {
+            Medecin medecin = medecinRepository.findById(organizerId).get();
+            Pageable pageable = PageRequest.of(page, size);
+            Page<Discussion> discussionPages = null;
+
+            if(isParticipant == false) {
+                if (status == null || status.equals("")) {
+                    discussionPages =  discussionRepository.findByMedcinResponsableAndTitreContains(
+                            medecin, keyword, pageable
+                    );
+                } else {
+                    discussionPages = discussionRepository.findByMedcinResponsableAndTitreContainsAndStatus(
+                            medecin, keyword, status, pageable
+                    );
+                }
+            } else {
+                if (status == null || status.equals("")) {
+                    discussionPages =  discussionRepository.findDiscussionsByParticipantIdAndTitreContains(
+                            organizerId, keyword, pageable
+                    );
+                } else {
+                    discussionPages = discussionRepository.findDiscussionsByParticipantIdAndStatusAndTitreContains(
+                            organizerId, status, keyword, pageable
+                    );
+                }
+            }
+
+            List<DiscussionResponseDto> discussionResponsePages = discussionPages.stream().map(discussion -> {
+                return discussionMapper.fromDiscussionToDiscussionResponseDto(discussion);
+            }).collect(Collectors.toList());
+
+            PageResponseDto<DiscussionResponseDto> response = new PageResponseDto<DiscussionResponseDto>();
+            response.setContent(discussionResponsePages);
+            response.setCurrentPage(page);
+            response.setPageSize(discussionPages.getSize());
+            response.setTotalPages(discussionPages.getTotalPages());
+            response.setTotalElement(discussionPages.getTotalElements());
+
+            return response;
+        } catch (Exception e) {
+            throw new DiscussionException("Erreur lors de la récupération des discussions", e);
+        }
+    }
+
+
+    @Override
     @Transactional
-    public Discussion createDiscussion(Discussion discussion) throws DiscussionException {
-        if (discussion == null) {
-            throw new IllegalArgumentException("La discussion ne doit pas être nulle.");
+    public DiscussionResponseDto createDiscussion(DiscussionRequestDto discussionRequestDto, Long organizerId) throws DiscussionException {
+        if (discussionRequestDto == null) {
+            throw new DiscussionException("La discussion ne doit pas être nulle.");
+        }
+        if (!discussionRequestDto.getMedcinResponsableId().equals(organizerId)) {
+            throw new DiscussionException("La discussion peut etre lancer seulement par le medecin responsable");
         }
         try {
-            return discussionRepository.save(discussion);
+            discussionRequestDto.setStatus(PLANIFIEE);
+            Discussion discussion = discussionMapper.fromDiscussionRequestDtoToDiscussion(discussionRequestDto);
+
+            List<Medecin> existingMedecins = medecinRepository.findAllById(discussionRequestDto.getMedecinsInvitesIds());
+            discussion.setMedecinsInvites(new ArrayList<>(existingMedecins));
+
+            existingMedecins.forEach(medecin -> {
+                Invitation invitation = Invitation.builder()
+                        .status(InvitationStatus.INVITEE)
+                        .medecinInvite(medecin)
+                        .discussion(discussion)
+                        .build();
+                invitationRepository.save(invitation);
+                discussion.getInvitations().add(invitation);
+            });
+
+            Discussion savedDiscussion = discussionRepository.save(discussion);
+            DiscussionResponseDto discussionResponseDto = discussionMapper.fromDiscussionToDiscussionResponseDto(savedDiscussion);
+            return discussionResponseDto;
         } catch (Exception e) {
             throw new DiscussionException("Erreur lors de l'enregistrement de la discussion", e);
         }
@@ -62,12 +158,23 @@ public class DiscussionServiceImpl implements DiscussionService {
     }
 
     @Override
-    @Transactional
-    public Discussion startDiscussion(Long id) throws DiscussionNotFoundException, DiscussionException {
+    public DiscussionResponseDto getDiscussionResponseDto(Long id) throws DiscussionNotFoundException {
         Discussion discussion = getDiscussion(id);
+        return discussionMapper.fromDiscussionToDiscussionResponseDto(discussion);
+    }
+
+    @Override
+    @Transactional
+    public DiscussionResponseDto startDiscussion(Long id, Long userId) throws DiscussionNotFoundException, DiscussionException {
+        Discussion discussion = getDiscussion(id);
+        Long respId = discussion.getMedcinResponsable().getId();
+        if (respId != userId) {
+            throw new DiscussionException("Seulement le medcin responsable peut lancer la discussion.");
+        }
         discussion.setStatus(EN_COURS);
         try {
-            return discussionRepository.save(discussion);
+            Discussion savedDiscussion = discussionRepository.save(discussion);
+            return discussionMapper.fromDiscussionToDiscussionResponseDto(savedDiscussion);
         } catch (Exception e) {
             throw new DiscussionException("Erreur lors du lancement de la discussion", e);
         }
@@ -75,11 +182,18 @@ public class DiscussionServiceImpl implements DiscussionService {
 
     @Override
     @Transactional
-    public Discussion finishDiscussion(Long id) throws DiscussionNotFoundException, DiscussionException {
+    public DiscussionResponseDto endDiscussion(Long id, Long userId)
+            throws DiscussionNotFoundException, DiscussionException
+    {
         Discussion discussion = getDiscussion(id);
+        Long respId = discussion.getMedcinResponsable().getId();
+        if (respId != userId) {
+            throw new DiscussionException("Seulement le medcin responsable peut terminer la discussion.");
+        }
         discussion.setStatus(TERMINEE);
         try {
-            return discussionRepository.save(discussion);
+            Discussion savedDiscussion = discussionRepository.save(discussion);
+            return discussionMapper.fromDiscussionToDiscussionResponseDto(savedDiscussion);
         } catch (Exception e) {
             throw new DiscussionException("Erreur lors du lancement de la discussion", e);
         }
@@ -89,11 +203,19 @@ public class DiscussionServiceImpl implements DiscussionService {
     @Transactional
     public Discussion joinDiscussion(Long id, Long medecinId) throws DiscussionNotFoundException, MedecinNotFoundException, DiscussionException {
         Discussion discussion = getDiscussion(id);
+        List<Medecin> medecinsInvites = discussion.getMedecinsInvites();
 
         Medecin medecin = medecinRepository.findById(medecinId)
                 .orElseThrow(() -> new MedecinNotFoundException("Le médecin avec l'identifiant " + medecinId + " non trouvé."));
 
-        discussion.getParticipants().add(medecin);
+        boolean isInvited = medecinsInvites.stream()
+                .anyMatch(invitedMedecin -> invitedMedecin.getId().equals(medecinId));
+
+        if (!isInvited) {
+            throw new DiscussionException("Le médecin avec l'identifiant " + medecinId + " n'est pas invité à cette discussion.");
+        }
+
+        discussion.addMedecin(medecin);
 
         try {
             return discussionRepository.save(discussion);
@@ -102,7 +224,7 @@ public class DiscussionServiceImpl implements DiscussionService {
         }
     }
 
-    @Override
+    /* @Override
     @Transactional (readOnly = true)
     public List<Discussion> getDiscussionsByMedecinSpecialite(Long medecinId) throws MedecinNotFoundException {
         try {
@@ -127,15 +249,14 @@ public class DiscussionServiceImpl implements DiscussionService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Discussion> getDiscussionsByMedecinIdAndStatus(Long medecinId) throws MedecinNotFoundException {
+    public List<Discussion> getByParticipantId(Long medecinId) throws MedecinNotFoundException {
         try {
             List<DiscussionStatus> status = Arrays.asList(DiscussionStatus.EN_COURS, DiscussionStatus.PLANIFIEE);
-            return discussionRepository.findDiscussionsByMedecinIdAndStatus(medecinId, status);
+            return discussionRepository.findByParticipantIdAndStatus(medecinId, status);
         } catch (Exception e) {
             throw new MedecinNotFoundException("Le médecin avec l'identifiant " + medecinId + " n'a pas été trouvé.", e);
         }
     }
-
 
     @Override
     @Transactional(readOnly = true)
@@ -152,11 +273,6 @@ public class DiscussionServiceImpl implements DiscussionService {
         } catch (Exception e) {
             throw new MedecinNotFoundException("Le médecin avec l'identifiant " + medecinId + " n'a pas été trouvé.", e);
         }
-    }
-
-
-
-
-
+    } */
 
 }

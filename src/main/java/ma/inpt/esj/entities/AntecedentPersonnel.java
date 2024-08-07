@@ -1,36 +1,39 @@
 package ma.inpt.esj.entities;
 
-import jakarta.persistence.*;
+
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Embeddable;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Builder;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 import java.util.List;
 
-@Entity
-@Data @AllArgsConstructor @NoArgsConstructor
+@Embeddable
+@Getter
+@Setter
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+@ToString
 public class AntecedentPersonnel {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
 
-    @OneToOne
-    @JoinColumn(name = "jeune_id")
-    private Jeune jeune;
 
-    @ElementCollection
     private List<String> maladies;
 
     private Boolean utiliseMedicaments;
 
-    @ElementCollection
+
     private List<String> medicaments;
 
     private Boolean chirurgicaux;
 
     private OperationChirurgicale operationsChirurgicales;
 
-    @ElementCollection
+
     private List<String> habitudes;
 
     private Integer cigarettesParJour;
@@ -38,4 +41,13 @@ public class AntecedentPersonnel {
     private String consommationAlcool;
 
     private String tempsEcran;
+
+    private String dureeFumee;
+    //---------------------------------------------
+
+    private String type;
+    private String specification;
+    private String specificationAutre;
+    private int nombreAnnee ;
 }
+
