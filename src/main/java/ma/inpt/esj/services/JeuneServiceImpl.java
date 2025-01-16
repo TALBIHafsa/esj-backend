@@ -1,5 +1,6 @@
 package ma.inpt.esj.services;
 
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Period;
@@ -154,7 +155,7 @@ public class JeuneServiceImpl implements JeuneService{
     }
 
     private int generateIdentifiantPatient() {
-        return new Random().nextInt(900000) + 100000;
+        return new SecureRandom().nextInt(900000) + 100000;
     }
 
 
